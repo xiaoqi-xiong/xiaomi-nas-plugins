@@ -1,0 +1,11 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>代理管理</title><link rel="stylesheet" href="proxy.css"></head><body><main>
+<header class="head"><img src="icon.png" alt=""><h1>代理管理</h1><button id="refresh" class="button" aria-label="刷新代理状态">刷新</button></header>
+<section class="service"><span id="indicator" class="dot"></span><div><strong id="health">正在连接…</strong><p id="engine" class="muted">读取现有 Mihomo 服务</p></div><span id="mode" class="mode">—</span></section>
+<section class="metrics" aria-label="代理连接统计"><div><span>当前连接</span><strong id="connections">—</strong></div><div><span>累计下载</span><strong id="download">—</strong></div><div><span>累计上传</span><strong id="upload">—</strong></div></section>
+<p class="scope">这些统计只包含经过代理的流量。公共下载器、盘搜及 MoviePilot 已配置的外网请求可使用代理；PT 下载器和小米原生功能保持直连。</p>
+<div class="section-head"><h2>代理节点</h2><span id="updated" class="muted">—</span></div>
+<p class="help">选择节点后再点“使用此节点”。延迟测试只检查连接，不代表下载速度。</p>
+<div id="groups"><p class="empty">正在读取节点…</p></div>
+<section class="policy"><h2>使用范围</h2><dl><dt>公共下载器</dt><dd>SOCKS5 代理</dd><dt>PT 下载器</dt><dd>直连 · 上传上限 1 MiB/s</dd><dt>小米原生应用</dt><dd>直连</dd><dt>透明代理 / TUN</dt><dd id="tun">正在读取</dd></dl><p class="muted">切换只影响经过现有代理的新连接，已有连接可能继续使用原节点。页面关闭或进入后台会停止刷新。</p></section>
+<p id="message" role="status" hidden></p>
+</main><script src="proxy.js"></script></body></html>
