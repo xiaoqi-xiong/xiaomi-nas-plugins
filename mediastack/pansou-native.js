@@ -1,0 +1,18 @@
+// Explicit user action only: a magnet result can be handed to an existing qB.
+(() => {
+ const base=new URL('.',location.href),endpoint=new URL('../native/download',base);
+ const dialog=document.createElement('dialog');dialog.className='native-download-dialog';
+ dialog.innerHTML='<header><h2>下载到…</h2><button type="button" class="native-close" aria-label="关闭下载选择">✕</button></header><form><p class="native-resource-name"></p><label for="native-downloader">选择下载器</label><select id="native-downloader"><option value="public">公共下载器（代理）</option><option value="pt">PT 下载器（直连，仅私有资源）</option></select><p class="native-save-path"></p><p class="native-warning" hidden>盘搜的公开磁力资源建议使用公共下载器。PT 下载器仅用于私有站点资源。</p><button class="native-submit" type="submit">确认下载</button><p class="native-result" role="status"></p></form>';
+ let magnet='',busy=false,optionRequest=0;
+ async function options(){
+  const select=dialog.querySelector('select'),result=dialog.querySelector('.native-result'),button=dialog.querySelector('.native-submit'),path=dialog.querySelector('.native-save-path');
+  const request=++optionRequest,chosen=select.value;
+  button.disabled=true;path.textContent='正在读取保存位置…';result.textContent='';result.dataset.error='false';dialog.querySelector('.native-warning').hidden=chosen!=='pt';
+  try{const r=await fetch(endpoint+'?downloader='+chosen,{cache:'no-store'}),j=await r.json();if(request!==optionRequest)return;if(!r.ok)throw Error(j.error||'读取下载器失败');path.textContent='保存位置：'+j.save_path;button.disabled=false}
+  catch(e){if(request!==optionRequest)return;path.textContent='';result.textContent=e.message;result.dataset.error='true'}
+ }
+ function open(url,title){if(!dialog.isConnected){document.body.append(dialog);dialog.querySelector('.native-close').onclick=()=>{if(!busy)dialog.close()};dialog.querySelector('select').onchange=options;dialog.querySelector('form').onsubmit=submit}magnet=url;dialog.querySelector('.native-resource-name').textContent=title;dialog.querySelector('select').value='public';dialog.querySelector('.native-result').textContent='';dialog.showModal();options()}
+ async function submit(e){e.preventDefault();if(busy)return;const app=dialog.querySelector('select').value;if(app==='pt'&&!confirm('这是直连的 PT 下载器。确认此链接来自允许使用的私有站点？公开磁力建议选公共下载器。'))return;busy=true;dialog.querySelector('select').disabled=true;const btn=dialog.querySelector('.native-submit'),result=dialog.querySelector('.native-result');btn.disabled=true;result.textContent='正在提交并检查任务…';result.dataset.error='false';try{const r=await fetch(endpoint,{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json'},body:JSON.stringify({downloader:app,magnet})}),j=await r.json();if(!r.ok)throw Error(j.error||'提交失败');result.textContent=(j.status==='exists'?'此任务已在下载器中，无需重复添加。':j.status==='added'?'任务已添加，并已确认出现在下载器中。':'下载器已接受链接，任务出现后可在下载器查看。')+'\n保存位置：'+j.save_path;if(j.name)result.textContent+='\n'+j.name}catch(e){result.textContent=e.message;result.dataset.error='true'}finally{busy=false;btn.disabled=false;dialog.querySelector('select').disabled=false}}
+ function attach(){for(const el of document.querySelectorAll('.result-item .result-link')){const row=el.closest('.result-item'),url=el.textContent.trim();let b=row.querySelector('.native-download-button');if(!url.startsWith('magnet:?')){if(b)b.remove();continue}if(!b){b=document.createElement('button');b.type='button';b.className='native-download-button';b.textContent='下载到…';row.append(b)}b.onclick=e=>{e.stopPropagation();open(url,row.querySelector('.result-title-button')?.textContent.trim()||'磁力资源')}}}
+ const observer=new MutationObserver(attach);observer.observe(document.documentElement,{subtree:true,childList:true});attach();
+})();
