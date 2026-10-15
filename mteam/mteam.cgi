@@ -28,7 +28,7 @@ if not owner_is_valid(SETTINGS, os.environ.get('USER', ''), os.getuid()):
     respond('403 Forbidden', 'text/plain; charset=utf-8', 'Native owner login required')
 elif path in ['', 'index.html', 'native-bridge.js', 'icon.png']:
     asset = 'index.html' if path == '' else path
-    target = ROOT / asset
+    target = APP_ROOT / "mediastack/native-bridge.js" if asset == "native-bridge.js" else ROOT / asset
     kind = mimetypes.guess_type(str(target))[0] or 'application/octet-stream'
     if asset.endswith('.js'):
         kind = 'application/javascript'

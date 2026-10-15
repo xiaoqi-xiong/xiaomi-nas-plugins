@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#202024">
+  <title>系统监控</title>
+  <link rel="stylesheet" href="monitor.cgi?asset=style.css">
+</head>
+<body data-xiaomi-shell>
+  <div class="app-shell">
+    <header class="app-header">
+      <button class="native-back" id="native-back" type="button" aria-label="返回小米智能存储">
+        <span aria-hidden="true">‹</span><span>返回</span>
+      </button>
+      <div class="brand">
+        <img src="monitor.cgi?asset=icon.svg" width="42" height="42" alt="">
+        <div>
+          <h1>系统监控</h1>
+          <p>只读系统状态</p>
+        </div>
+      </div>
+      <div class="header-state" id="header-state" aria-live="polite">连接中</div>
+    </header>
+
+    <div class="error-strip" id="error-strip" hidden role="status"></div>
+
+    <nav class="tabs" id="tabs" aria-label="监控分类" role="tablist">
+      <button type="button" role="tab" id="tab-overview" aria-controls="panel-overview" aria-selected="true" tabindex="0" data-tab="overview">总览</button>
+      <button type="button" role="tab" id="tab-cpu" aria-controls="panel-cpu" aria-selected="false" tabindex="-1" data-tab="cpu">CPU</button>
+      <button type="button" role="tab" id="tab-memory" aria-controls="panel-memory" aria-selected="false" tabindex="-1" data-tab="memory">内存</button>
+      <button type="button" role="tab" id="tab-network" aria-controls="panel-network" aria-selected="false" tabindex="-1" data-tab="network">网络</button>
+      <button type="button" role="tab" id="tab-disk" aria-controls="panel-disk" aria-selected="false" tabindex="-1" data-tab="disk">磁盘</button>
+      <button type="button" role="tab" id="tab-docker" aria-controls="panel-docker" aria-selected="false" tabindex="-1" data-tab="docker">Docker</button>
+    </nav>
+
+    <main>
+      <section class="panel" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview" data-panel="overview">
+        <div class="card overview-card">
+          <div class="section-heading"><div><h2>运行状态</h2><p id="host-sample-note">等待首次采样</p></div><span class="sample-dot" id="host-sample-dot" aria-hidden="true"></span></div>
+          <div class="gauge-grid">
+            <div class="gauge-item"><div class="gauge" id="cpu-gauge"><strong id="overview-cpu">—</strong></div><span>CPU 使用率</span></div>
+            <div class="gauge-item"><div class="gauge" id="memory-gauge"><strong id="overview-memory">—</strong></div><span>内存使用率</span></div>
+          </div>
+          <div class="overview-grid">
+            <div class="metric metric-network"><span>网络</span><strong id="overview-rx">—</strong><small id="overview-tx">发送 —</small></div>
+            <div class="metric metric-disk"><span>磁盘</span><strong id="overview-read">—</strong><small id="overview-write">写入 —</small></div>
+            <div class="metric metric-temperature"><span>温度</span><strong id="overview-temperature">—</strong><small id="overview-temperature-name">没有可用传感器</small></div>
+          </div>
+        </div>
+
+        <div class="card system-info-card">
+          <div class="section-heading"><div><h2>系统信息</h2><p>最近一次成功采样</p></div></div>
+          <div class="system-info-grid">
+            <div class="metric"><span>设备型号</span><strong id="system-model">未知</strong></div>
+            <div class="metric"><span>CPU 型号</span><strong id="system-cpu-model">未知</strong><small id="system-cpu-cores">核心数：未知</small></div>
+            <div class="metric"><span>内存总量</span><strong id="system-memory-total">未提供</strong></div>
+            <div class="metric"><span>固件版本</span><strong id="system-firmware">未提供</strong></div>
+            <div class="metric"><span>系统版本</span><strong id="system-os">未提供</strong><small id="system-architecture">架构：未提供</small></div>
+            <div class="metric"><span>内核</span><strong id="system-kernel">未提供</strong></div>
+            <div class="metric"><span>运行时间</span><strong class="clock" id="overview-uptime">—</strong></div>
+            <div class="metric"><span>负载（1 / 5 / 15 分钟）</span><strong id="overview-load">—</strong></div>
+            <div class="metric"><span>内存可用</span><strong id="overview-available">—</strong></div>
+          </div>
+        </div>
+
+        <div class="card"><div class="section-heading"><div><h2>存储卷</h2><p>容量信息来自已挂载存储卷</p></div></div><div class="rows" id="overview-volumes"><p class="empty">等待采样…</p></div></div>
+        <div class="card"><div class="section-heading"><div><h2>警告</h2><p>数据异常会在这里单独显示</p></div></div><div class="rows" id="overview-warnings"><p class="empty">暂无警告</p></div></div>
+      </section>
+
+      <section class="panel" id="panel-cpu" role="tabpanel" aria-labelledby="tab-cpu" data-panel="cpu" hidden>
+        <div class="card">
+          <div class="section-heading"><div><h2>CPU</h2><p>本次会话 · 最近 5 分钟 · 纵轴固定 0–100%</p></div></div>
+          <div class="detail-grid">
+            <div class="metric accent-blue"><span>当前使用率</span><strong id="cpu-current">—</strong><div class="meter"><i id="cpu-meter"></i></div></div>
+            <div class="metric"><span>处理器核心</span><strong id="cpu-cores">—</strong></div>
+            <div class="metric wide"><span>系统负载（1 / 5 / 15 分钟）</span><strong id="cpu-load">—</strong></div>
+          </div>
+          <div class="chart-wrap">
+            <svg class="chart" id="cpu-chart" viewBox="0 0 600 190" role="img" aria-label="CPU 使用率趋势图">
+              <g class="chart-grid" aria-hidden="true"><line x1="0" y1="20" x2="600" y2="20"></line><line x1="0" y1="57.5" x2="600" y2="57.5"></line><line x1="0" y1="95" x2="600" y2="95"></line><line x1="0" y1="132.5" x2="600" y2="132.5"></line><line x1="0" y1="170" x2="600" y2="170"></line></g>
+              <g class="chart-labels" aria-hidden="true"><text x="4" y="16">100%</text><text x="4" y="166">0%</text><text x="530" y="186">现在</text></g>
+              <g id="cpu-series"></g>
+            </svg>
+          </div>
+          <div class="chart-note"><span>本次会话 · 最近 5 分钟</span><span id="cpu-gap-note">空白表示数据未知或采样间隔</span></div>
+          <div class="split-info"><div><span>平均负载</span><strong id="cpu-load-detail">—</strong></div><div><span>CPU 温度</span><strong id="cpu-temperature">—</strong></div></div>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-memory" role="tabpanel" aria-labelledby="tab-memory" data-panel="memory" hidden>
+        <div class="card">
+          <div class="section-heading"><div><h2>内存</h2><p>使用率与容量分别展示，不混合缓存统计</p></div></div>
+          <div class="memory-summary">
+            <div class="metric accent-blue"><span>已用内存</span><strong id="memory-used-main">—</strong><div class="meter"><i id="memory-meter"></i></div><small id="memory-percent">使用率 —</small></div>
+            <div class="metric"><span>总大小</span><strong id="memory-total">—</strong></div>
+            <div class="metric"><span>可用</span><strong id="memory-available">—</strong></div>
+          </div>
+          <div class="chart-wrap compact-chart"><svg class="chart" id="memory-chart" viewBox="0 0 600 190" role="img" aria-label="内存使用率趋势图"><g class="chart-grid" aria-hidden="true"><line x1="0" y1="20" x2="600" y2="20"></line><line x1="0" y1="57.5" x2="600" y2="57.5"></line><line x1="0" y1="95" x2="600" y2="95"></line><line x1="0" y1="132.5" x2="600" y2="132.5"></line><line x1="0" y1="170" x2="600" y2="170"></line></g><g class="chart-labels" aria-hidden="true"><text x="4" y="16">100%</text><text x="4" y="166">0%</text><text x="530" y="186">现在</text></g><g id="memory-series"></g></svg></div>
+          <div class="chart-note"><span>本次会话 · 最近 5 分钟</span><span>空白表示数据未知或采样间隔</span></div>
+          <div class="cache-grid"><div class="metric"><span>系统保留</span><strong id="memory-free">—</strong></div><div class="metric"><span>缓冲</span><strong id="memory-buffers">—</strong></div><div class="metric"><span>缓存</span><strong id="memory-cached">—</strong></div><div class="metric"><span>交换空间</span><strong id="memory-swap">—</strong></div></div>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-network" role="tabpanel" aria-labelledby="tab-network" data-panel="network" hidden>
+        <div class="card">
+          <div class="section-heading"><div><h2>网络</h2><p>汇总可见接口 · 速度单位：B/s</p></div></div>
+          <div class="network-legend"><span class="legend-rx">● 接收</span><span class="legend-tx">● 发送</span><span id="network-chart-unit">—</span></div>
+          <div class="chart-wrap"><svg class="chart" id="network-chart" viewBox="0 0 600 190" role="img" aria-label="网络接收和发送速度趋势图"><g class="chart-grid" aria-hidden="true"><line x1="0" y1="20" x2="600" y2="20"></line><line x1="0" y1="57.5" x2="600" y2="57.5"></line><line x1="0" y1="95" x2="600" y2="95"></line><line x1="0" y1="132.5" x2="600" y2="132.5"></line><line x1="0" y1="170" x2="600" y2="170"></line></g><g class="chart-labels" aria-hidden="true"><text id="network-chart-max" x="4" y="16">—</text><text x="4" y="166">0</text><text x="530" y="186">现在</text></g><g id="network-series"></g></svg></div>
+          <div class="chart-note"><span>本次会话 · 最近 5 分钟</span><span>空白表示速率未知或采样间隔</span></div>
+          <div class="rows" id="network-rows"><p class="empty">等待采样…</p></div>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-disk" role="tabpanel" aria-labelledby="tab-disk" data-panel="disk" hidden>
+        <div class="card"><div class="section-heading"><div><h2>磁盘容量</h2><p>每个挂载卷独立显示</p></div></div><div class="rows" id="disk-volumes"><p class="empty">等待采样…</p></div></div>
+        <div class="card"><div class="section-heading"><div><h2>磁盘读写</h2><p>每个设备的采样速率 · 设备未提供时显示 —</p></div></div><div class="rows" id="disk-io"><p class="empty">等待采样…</p></div></div>
+        <div class="card"><div class="section-heading"><div><h2>温度传感器</h2><p>只显示系统实际提供的传感器，不推断设备对应关系</p></div></div><div class="rows" id="disk-temperatures"><p class="empty">等待采样…</p></div></div>
+      </section>
+
+      <section class="panel" id="panel-docker" role="tabpanel" aria-labelledby="tab-docker" data-panel="docker" hidden>
+        <div class="card docker-overview"><div class="section-heading"><div class="section-title-row"><img class="docker-icon" src="monitor.cgi?asset=docker-icon.svg" width="34" height="34" alt=""><div><h2>Docker</h2><p id="docker-sample-note">等待首次采样</p></div></div><span class="sample-dot" id="docker-sample-dot" aria-hidden="true"></span></div><div class="docker-summary" id="docker-summary"><div class="metric"><span>运行中</span><strong>—</strong></div><div class="metric"><span>已停止</span><strong>—</strong></div><div class="metric"><span>全部容器</span><strong>—</strong></div><div class="metric"><span>Compose 项目</span><strong>—</strong></div></div><div class="rows" id="docker-projects"></div><div class="rows" id="docker-warnings"></div></div>
+        <div class="card"><div class="section-heading"><div><h2>容器</h2><p id="docker-list-note">Docker 只读状态</p></div></div><div class="docker-tools"><div class="filter-group" role="group" aria-label="容器状态筛选"><button class="filter active" type="button" data-filter="all" aria-pressed="true">全部</button><button class="filter" type="button" data-filter="running" aria-pressed="false">运行中</button><button class="filter" type="button" data-filter="stopped" aria-pressed="false">已停止</button></div><label class="search-box"><span class="sr-only">搜索容器</span><input id="docker-search" type="search" placeholder="搜索名称、镜像或项目" autocomplete="off"></label></div><div class="rows container-list" id="docker-list"><p class="empty">等待 Docker 状态…</p></div></div>
+      </section>
+    </main>
+
+    <footer class="app-footer"><span id="status" role="status">正在连接系统监控…</span><span id="last-good">尚无成功采样</span></footer>
+  </div>
+  <script src="monitor.cgi?asset=native-bridge.js"></script>
+  <script src="monitor.cgi?asset=monitor.js"></script>
+</body>
+</html>

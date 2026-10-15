@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#101828">
+  <title>Music · Songloft</title>
+  <link rel="icon" href="music.cgi?asset=icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="music.cgi?asset=music.css">
+</head>
+<body data-xiaomi-shell>
+  <header class="topbar">
+    <div class="brand"><img src="music.cgi?asset=icon.svg" alt=""><span>Music</span><small>Songloft</small></div>
+    <button id="native-back" class="quiet native-back" type="button" hidden>‹ 小米</button>
+    <button id="logout" class="quiet" type="button" hidden>退出</button>
+  </header>
+  <main>
+    <section id="notice" class="notice" role="status" aria-live="polite">正在检查 Songloft…</section>
+    <section id="login" class="panel" hidden>
+      <h1>连接你的音乐库</h1>
+      <p>Songloft 服务由你自行部署，登录凭证只提交到本机 Music 网关。</p>
+      <form id="login-form">
+        <label>用户名<input name="username" autocomplete="username" required></label>
+        <label>密码<input name="password" type="password" autocomplete="current-password" required></label>
+        <button class="primary" type="submit">登录 Songloft</button>
+      </form>
+      <p id="login-error" class="error" role="alert"></p>
+    </section>
+    <section id="library" hidden>
+      <div class="library-head">
+        <div><p class="eyebrow">我的曲库</p><h1>歌曲</h1></div>
+        <form id="search-form" class="search" role="search"><input id="search" type="search" placeholder="搜索歌名、歌手或专辑" aria-label="搜索"><button type="submit">搜索</button></form>
+      </div>
+      <div id="library-error" class="error" role="alert"></div>
+      <div id="songs" class="songs"></div>
+      <button id="more" class="more" type="button" hidden>加载更多</button>
+    </section>
+  </main>
+  <footer class="player" hidden id="player">
+    <div class="now"><div id="now-title">未播放</div><small id="now-artist"></small></div>
+    <audio id="audio" controls preload="none"></audio>
+  </footer>
+  <script src="music.cgi?asset=native-bridge.js"></script>
+  <script src="music.cgi?asset=music.js"></script>
+</body>
+</html>

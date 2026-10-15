@@ -15,6 +15,7 @@ DEFAULTS = {
         "public": 18081,
         "pansou": 8889,
         "proxy_controller": 19090,
+        "songloft": 58091,
     },
     "plugin_namespace": "CHANGE_ME",
 }

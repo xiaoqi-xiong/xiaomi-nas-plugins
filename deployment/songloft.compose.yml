@@ -1,0 +1,23 @@
+services:
+  songloft:
+    # Official stable release v2.13.3 (Docker Hub manifest digest pinned).
+    image: songloft/songloft:2.13.3@sha256:0c7cb367b66a0f12732913c39d81467f54b9239648258a719000b6efe7f091d6
+    platform: linux/arm64
+    container_name: songloft
+    restart: unless-stopped
+    # Keep the service on the NAS loopback interface.  The Music CGI gateway
+    # is the native UI boundary; publish a LAN address only by an explicit,
+    # separately reviewed reverse-proxy configuration.
+    ports:
+      - "127.0.0.1:${SONGLOFT_PORT:-58091}:58091"
+    volumes:
+      # The library is intentionally read-only.  Songloft's database, cache,
+      # and cover data live in the separate writable data directory below.
+      - "${SONGLOFT_MUSIC_DIR:?set SONGLOFT_MUSIC_DIR}:/app/music:ro"
+      - "${SONGLOFT_DATA_DIR:?set SONGLOFT_DATA_DIR}:/app/data"
+    environment:
+      ADMIN_USERNAME: "${SONGLOFT_ADMIN_USERNAME:?set SONGLOFT_ADMIN_USERNAME}"
+      ADMIN_PASSWORD: "${SONGLOFT_ADMIN_PASSWORD:?set SONGLOFT_ADMIN_PASSWORD}"
+      LISTEN_PORT: "58091"
+      PUID: "${SONGLOFT_UID:-1000}"
+      PGID: "${SONGLOFT_GID:-1000}"

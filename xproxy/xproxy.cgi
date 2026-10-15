@@ -62,7 +62,7 @@ elif method not in ['GET','HEAD']:
  respond('405 Method Not Allowed','text/plain','Unsupported method')
 elif path in ['', 'index.html','ui.html','proxy.js','proxy.css','native-bridge.js','icon.png']:
  asset='index.html' if not path else path
- p=ROOT/asset
+ p=APP_ROOT/"mediastack/native-bridge.js" if asset=="native-bridge.js" else ROOT/asset
  kind='text/html; charset=utf-8' if asset.endswith('.html') else 'application/javascript' if asset.endswith('.js') else 'text/css' if asset.endswith('.css') else 'image/png'
  respond('200 OK',kind,p.read_bytes())
 else:respond('404 Not Found','text/plain','Unknown proxy route')

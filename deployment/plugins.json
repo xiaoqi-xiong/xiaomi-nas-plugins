@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "id": "resources",
+      "title": "搜索下载",
+      "handler": "mediastack/mediastack.cgi",
+      "entry": "/center/index.html#search",
+      "icon": "assets/resources.png",
+      "mode": "existing-services"
+    },
+    {
+      "id": "mediastack",
+      "title": "MoviePilot",
+      "handler": "mediastack/mediastack.cgi",
+      "entry": "/index.html#/",
+      "icon": "assets/mediastack.png",
+      "mode": "existing-services"
+    },
+    {
+      "id": "resource-monitor",
+      "title": "系统监控",
+      "handler": "resource-monitor/monitor.cgi",
+      "entry": "/index.html#overview",
+      "icon": "assets/resource-monitor.png",
+      "mode": "read-only"
+    },
+    {
+      "id": "docker-monitor",
+      "title": "Docker",
+      "handler": "resource-monitor/monitor.cgi",
+      "entry": "/index.html#docker",
+      "icon": "assets/docker-monitor.png",
+      "mode": "read-only"
+    },
+    {
+      "id": "music",
+      "title": "音乐",
+      "handler": "music/music.cgi",
+      "entry": "/index.html#/",
+      "icon": "assets/music.png",
+      "mode": "songloft"
+    },
+    {
+      "id": "xproxy",
+      "title": "代理管理",
+      "handler": "xproxy/xproxy.cgi",
+      "entry": "/index.html#/",
+      "icon": "xproxy/icon.png",
+      "mode": "existing-services"
+    },
+    {
+      "id": "mteam",
+      "title": "M-Team 官网",
+      "handler": "mteam/mteam.cgi",
+      "entry": "/index.html#/",
+      "icon": "mteam/icon.png",
+      "mode": "official-site-wrapper"
+    }
+  ],
+  "legacy_aliases": [
+    {
+      "id": "qbpt",
+      "handler": "mediastack/mediastack.cgi",
+      "route": "pt"
+    },
+    {
+      "id": "qbpublic",
+      "handler": "mediastack/mediastack.cgi",
+      "route": "public"
+    },
+    {
+      "id": "pansou",
+      "handler": "mediastack/mediastack.cgi",
+      "route": "pansou"
+    }
+  ]
+}

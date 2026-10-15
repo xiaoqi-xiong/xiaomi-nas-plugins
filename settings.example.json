@@ -8,7 +8,8 @@
     "pt": 18080,
     "public": 18081,
     "pansou": 8889,
-    "proxy_controller": 19090
+    "proxy_controller": 19090,
+    "songloft": 58091
   },
   "plugin_namespace": "your-plugin-account-id"
 }

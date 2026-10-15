@@ -212,8 +212,8 @@ elif app_override in ['pt', 'public', 'pansou'] and path == app_override + '/ind
     html = html.replace('moviepilot/index.html#/', 'vendor-ui/index.html' if app_override == 'pansou' else 'index.html?embedded=1')
     html = html.replace('MoviePilot 资源管理', '下载与资源管理')
     respond('200 OK', 'text/html; charset=utf-8', html)
-elif path in ['icon.png', 'pt/icon.png', 'public/icon.png', 'pansou/icon.png']:
-    plugin = plugin_override if plugin_override in ['qbpt', 'qbpublic', 'pansou'] else 'mediastack'
+elif path in ['icon.png', 'pt/icon.png', 'public/icon.png', 'pansou/icon.png', 'center/icon.png']:
+    plugin = plugin_override if plugin_override in ['qbpt', 'qbpublic', 'pansou', 'resources'] else 'mediastack'
     icon = APP_ROOT / 'assets' / (plugin + '.png')
     respond('200 OK', 'image/png', icon.read_bytes())
 elif path == 'status.json':
@@ -223,6 +223,12 @@ elif path in ['pt/index.html', 'public/index.html']:
     respond('200 OK', 'text/html; charset=utf-8', (ROOT / 'qb-native.html').read_bytes())
 elif path == 'pansou/index.html':
     respond('200 OK', 'text/html; charset=utf-8', (ROOT / 'pansou.html').read_bytes())
+elif path in ['center', 'center/', 'center/index.html']:
+    respond('200 OK', 'text/html; charset=utf-8', (ROOT / 'index.html').read_bytes())
+elif path == 'center/resource-center.js':
+    respond('200 OK', 'application/javascript', (ROOT / 'resource-center.js').read_bytes())
+elif path == 'center/resource-center.css':
+    respond('200 OK', 'text/css', (ROOT / 'resource-center.css').read_bytes())
 elif path in ['bridge-auth.js', 'moviepilot/bridge-auth.js']:
     respond('200 OK', 'application/javascript', (ROOT / 'bridge-auth.js').read_bytes())
 elif path == 'native-bridge.js' or path in ['pt/native-bridge.js', 'public/native-bridge.js', 'pansou/native-bridge.js']:
@@ -336,9 +342,25 @@ else:
                 body = html.encode('utf-8')
             if route == 'moviepilot' and 'text/html' in content_type and rest in ['', 'index.html']:
                 body = body.replace(b'<head>', b'<head><script src="./bridge-auth.js"></script>', 1)
+            if upstream.status >= 400 and 'text/html' in content_type:
+                # Same-origin iframe load events do not expose HTTP status.
+                # Add a fixed marker so the Resource Center cannot present an
+                # upstream error document as a successfully loaded app.
+                marker = ('<meta name="mediastack-error" content="' +
+                          str(upstream.status) + '">').encode('ascii')
+                if b'<head>' in body:
+                    body = body.replace(b'<head>', b'<head>' + marker, 1)
+                else:
+                    body = marker + body
             prefix = f"/plugin/{SETTINGS['plugin_namespace']}/mediastack/{route}/"
             cookie_prefix = f"/plugin/{SETTINGS['plugin_namespace']}/mediastack/" if route == 'moviepilot' else prefix
-            if plugin_override in ['qbpt', 'qbpublic', 'pansou']:
+            if plugin_override == 'resources':
+                # The center shares one plugin id while keeping each backend
+                # under its sibling route, so upstream redirects and cookies
+                # must retain /resources/{route}/.
+                prefix = f"/plugin/{SETTINGS['plugin_namespace']}/resources/{route}/"
+                cookie_prefix = prefix
+            elif plugin_override in ['qbpt', 'qbpublic', 'pansou']:
                 prefix = f"/plugin/{SETTINGS['plugin_namespace']}/{plugin_override}/"
                 cookie_prefix = prefix
             lines = ['Status: ' + str(upstream.status) + ' ' + upstream.reason]

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="搜索下载">
+  <rect width="64" height="64" rx="16" fill="#183c62"/>
+  <circle cx="25" cy="25" r="11" fill="none" stroke="#c5e7ff" stroke-width="4"/>
+  <path d="m33 33 11 11M47 17v14m-5-5 5 5 5-5M36 50h17" fill="none" stroke="#67bcff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
