@@ -1,0 +1,14 @@
+{
+  "owner": "your-linux-username",
+  "owner_uid": 1000,
+  "nas_host": "127.0.0.1",
+  "proxy_controller_host": "127.0.0.1",
+  "ports": {
+    "moviepilot": 3000,
+    "pt": 18080,
+    "public": 18081,
+    "pansou": 8889,
+    "proxy_controller": 19090
+  },
+  "plugin_namespace": "your-plugin-account-id"
+}
