@@ -16,6 +16,7 @@
 
 ## 开始使用
 
+- [Root 与 SSH：发现、备份、恢复和回退](docs/ROOT-SSH.md)
 - [安装边界、配置和回退](docs/INSTALL.md)
 - [入口、路由与服务架构](PLUGIN-ARCHITECTURE.md)
 - [Songloft 部署和音乐验证](docs/MUSIC.md)

@@ -32,7 +32,7 @@ def api():
    def node(name):
     p=proxies.get(name,{});h=p.get('history') or [];d=h[-1].get('delay') if h else None
     return {'name':name,'type':p.get('type','Unknown'),'delay':d if isinstance(d,int) and d>0 else None}
-   answer({'version':v.get('version',''),'mode':config.get('mode',''),'tun':bool(config.get('tun',{}).get('enable')),'connections':len(connections.get('connections',[])),'download_total':connections.get('downloadTotal',0),'upload_total':connections.get('uploadTotal',0),'groups':[{'name':name,'current':p.get('now',''),'nodes':[node(n) for n in p.get('all',[])]} for name,p in groups.items()]})
+   answer({'version':v.get('version',''),'mode':config.get('mode',''),'tun':bool((config.get('tun') or {}).get('enable')),'connections':len(connections.get('connections') or []),'download_total':connections.get('downloadTotal',0),'upload_total':connections.get('uploadTotal',0),'groups':[{'name':name,'current':p.get('now',''),'nodes':[node(n) for n in p.get('all',[])]} for name,p in groups.items()]})
    return
   if method!='POST' or path not in ['native/select','native/delay']:
    answer({'error':'不支持此操作'},'405 Method Not Allowed');return

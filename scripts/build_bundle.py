@@ -12,7 +12,7 @@ DIRECTORIES = ("assets", "mediastack", "mteam", "xproxy", "resource-monitor", "m
 EXTENSIONS = {".py", ".cgi", ".html", ".css", ".js", ".svg", ".png"}
 TOP_FILES = ("README.md", "LICENSE", "SECURITY.md", "PLUGIN-ARCHITECTURE.md", "settings.py", "settings.example.json",
              "deployment/plugins.json", "deployment/songloft.compose.yml", "deployment/songloft.env.example",
-             "docs/MUSIC.md", "docs/INSTALL.md", "docs/REFERENCE-DESIGN.md",
+             "docs/MUSIC.md", "docs/INSTALL.md", "docs/ROOT-SSH.md", "docs/REFERENCE-DESIGN.md",
              "scripts/build_bundle.py", "scripts/preview_suite.py")
 
 

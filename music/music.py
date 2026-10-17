@@ -14,11 +14,14 @@ small read/play surface instead of acting as a general HTTP proxy:
 """
 
 import http.client
+import fcntl
+import hashlib
 import json
 import mimetypes
 import os
 import re
 import sys
+import time
 from http import HTTPStatus
 from pathlib import Path
 from urllib.parse import parse_qsl, quote, unquote, urlencode, urlsplit
@@ -51,7 +54,8 @@ RESPONSE_HEADERS = {
     "etag",
     "last-modified",
 }
-STATIC_ASSETS = {"music.js", "music.css", "icon.svg", "native-bridge.js"}
+STATIC_ASSETS = {"music.js", "music.css", "icon.svg", "native-bridge.js", "songloft-ui-bridge.js",
+                 "workflow.html", "workflow.js", "workflow.css", "downloads.html", "downloads.js"}
 ASSET_NAMES = {"index.html"} | STATIC_ASSETS
 
 
@@ -228,7 +232,7 @@ def _timeout(settings, environ):
         return 8
 
 
-def _request(settings, environ, method, endpoint, query="", body=None, auth=None, stream=False):
+def _request(settings, environ, method, endpoint, query="", body=None, auth=None, stream=False, content_type=None):
     origin = songloft_origin(settings, environ)
     if origin is None:
         raise GatewayError(503, "songloft_unconfigured", "Songloft is not configured")
@@ -245,7 +249,7 @@ def _request(settings, environ, method, endpoint, query="", body=None, auth=None
     if method == "GET" and environ.get("HTTP_IF_RANGE"):
         headers["If-Range"] = environ["HTTP_IF_RANGE"]
     if body is not None:
-        headers["Content-Type"] = "application/json"
+        headers["Content-Type"] = content_type or "application/json"
         headers["Content-Length"] = str(len(body))
     connection = _connection(origin, _timeout(settings, environ))
     try:
@@ -275,6 +279,78 @@ def _auth_header(environ):
         if name == "songloft_access" and TOKEN_VALUE.fullmatch(cookie_value):
             return "Bearer " + cookie_value
     return None
+
+
+def _private_json(path, value):
+    temporary = path.with_suffix('.tmp')
+    descriptor = os.open(temporary, os.O_CREAT | os.O_TRUNC | os.O_WRONLY, 0o600)
+    with os.fdopen(descriptor, 'w') as stream:
+        json.dump(value, stream)
+    os.chmod(temporary, 0o600)
+    os.replace(temporary, path)
+
+
+def native_session(settings, environ, credentials=None, forget=False, renew=False):
+    """Owner-only remembered login; share a cached app token with media requests.
+
+    HTML audio cannot set native/application headers and native shells may not
+    retain third-party cookies. Its already owner-gated CGI request therefore
+    uses this same NAS-side session, never a token in a media URL.
+    """
+    private = APP_ROOT / 'private'
+    saved = private / 'native-login.json'
+    if not saved.exists() and credentials is None:
+        return None
+    private.mkdir(exist_ok=True, mode=0o700)
+    cache = private / 'music-session.json'
+    descriptor = os.open(private / 'native-login.lock', os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        accounts = json.loads(saved.read_text()) if saved.exists() else {}
+        if forget:
+            accounts.pop('music', None)
+            _private_json(saved, accounts)
+            cache.unlink(missing_ok=True)
+            return None
+        login = credentials or accounts.get('music')
+        if not login:
+            return None
+        if not all(isinstance(login.get(key), str) and 0 < len(login[key]) < 512 for key in ['username', 'password']):
+            raise GatewayError(401, 'login_required', 'Music automatic login is unavailable')
+        fingerprint = hashlib.sha256(json_bytes(login)).hexdigest()
+        cached = json.loads(cache.read_text()) if cache.exists() else {}
+        if credentials is None and not renew and cached.get('account') == fingerprint and cached.get('expires_at', 0) > time.time() + 60:
+            return cached['tokens']
+        refresh = cached.get('tokens', {}).get('refresh_token') if cached.get('account') == fingerprint else None
+        endpoint = '/api/v1/auth/refresh' if refresh and credentials is None else '/api/v1/auth/login'
+        body = json_bytes({'refresh_token': refresh} if endpoint.endswith('/refresh') else login)
+        connection, response = _request(settings, environ, 'POST', endpoint, body=body)
+        try:
+            raw = response.read(MAX_JSON_BODY)
+        finally:
+            connection.close()
+        if response.status == 401 and endpoint.endswith('/refresh'):
+            connection, response = _request(settings, environ, 'POST', '/api/v1/auth/login', body=json_bytes(login))
+            try:
+                raw = response.read(MAX_JSON_BODY)
+            finally:
+                connection.close()
+        if response.status != 200:
+            raise GatewayError(401, 'login_required', 'Music login was not confirmed')
+        result = json.loads(raw)
+        if not all(isinstance(result.get(key), str) and TOKEN_VALUE.fullmatch(result[key]) for key in ['access_token', 'refresh_token']):
+            raise GatewayError(502, 'invalid_session', 'Music login response was invalid')
+        result = {key: result[key] for key in ['access_token', 'refresh_token', 'expires_in', 'token_type'] if key in result}
+        expires = max(60, min(2592000, int(result.get('expires_in', 3600))))
+        if credentials is not None:
+            accounts['music'] = {key: login[key] for key in ['username', 'password']}
+            _private_json(saved, accounts)
+        _private_json(cache, {'account': fingerprint, 'expires_at': time.time() + expires, 'tokens': result})
+        return result
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise GatewayError(503, 'session_unavailable', 'Music automatic login is unavailable') from exc
+    finally:
+        os.close(descriptor)
 
 
 def _read_body(environ):
@@ -398,6 +474,52 @@ def _forward_auth_response(connection, response, set_auth_cookies, clear_auth_co
     sys.stdout.buffer.write(("\r\n".join(lines) + "\r\n\r\n").encode("utf-8") + body)
 
 
+def vendor_ui(settings, environ, path, query, method):
+    """Official Songloft UI/API, at a fixed local origin behind the native gate.
+
+    This is the administrator's full music application. Source audio remains
+    read-only in Docker; no Xiaomi credential is sent to the application.
+    """
+    relative = unquote(path.removeprefix('vendor-ui/'))
+    if '..' in relative.split('/') or '\\' in relative or relative.startswith('/') or ':' in relative:
+        raise GatewayError(404, 'not_found', 'Unknown Songloft route')
+    is_api = relative.startswith('api/v1/')
+    if method not in ({'GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'} if is_api else {'GET'}):
+        raise GatewayError(405, 'method_not_allowed', 'Unsupported Songloft operation')
+    # Application tokens in upstream-generated media URLs are unnecessary;
+    # every request already has the native owner gate and cached app session.
+    query = urlencode([(k, v) for k, v in parse_qsl(query, keep_blank_values=True)
+                       if k not in {'access_token', 'token'}])
+    if relative == 'api/v1/auth/login' and method == 'POST':
+        credentials = json.loads(_json_request(environ, ['username', 'password']))
+        result = native_session(settings, environ, credentials=credentials)
+        respond('200 OK', 'application/json', json_bytes(result))
+        return
+    auth = _auth_header(environ)
+    if is_api and not auth:
+        session = native_session(settings, environ)
+        auth = 'Bearer ' + session['access_token'] if session else None
+    if relative == 'api/v1/auth/logout' and method == 'POST':
+        native_session(settings, environ, forget=True)
+    body = _read_body(environ) if method in {'POST', 'PUT', 'PATCH', 'DELETE'} else None
+    connection, response = _request(settings, environ, method, '/' + (relative or 'index.html'),
+                                    query, body=body, auth=auth,
+                                    content_type=environ.get('CONTENT_TYPE'))
+    if not is_api and relative in {'', 'index.html'} and response.status == 200:
+        try:
+            html = response.read(MAX_JSON_BODY).decode('utf-8')
+        finally:
+            connection.close()
+        html = html.replace('<base href="/">', '<base href="./">')
+        html = html.replace('<head>', '<head><script src="../songloft-ui-bridge.js"></script>', 1)
+        html = re.sub(r'_flutter\.loader\.load\(\{\s*config:\s*config\s*\}\);',
+                      'window.nativeSongloftReady.then(function () { config.canvasKitBaseUrl = "canvaskit/"; '
+                      '_flutter.loader.load({ config: config }); });', html)
+        respond('200 OK', 'text/html; charset=utf-8', html)
+    else:
+        _forward_response(connection, response)
+
+
 def serve():
     settings = get_settings(APP_ROOT)
     environ = os.environ
@@ -414,6 +536,9 @@ def serve():
                      or parsed_file_uri.scheme.lower() == "https")
 
     try:
+        if path.startswith('vendor-ui/'):
+            vendor_ui(settings, environ, path, query, method)
+            return
         # Some Xiaomi hosts address a CGI entry with ``?asset=...`` (the
         # same shape used by the Resource Monitor entry).  Keep that alias
         # narrow and do not let it turn into a file browser.
@@ -436,7 +561,40 @@ def serve():
         if path in {"", "index.html"}:
             if method != "GET":
                 raise GatewayError(405, "method_not_allowed", "Music page requires GET")
-            respond("200 OK", "text/html; charset=utf-8", (ROOT / "index.html").read_bytes())
+            if dict(parse_qsl(query)).get('embedded') != '1':
+                # Each app keeps its own iframe and authentication, including
+                # when the user switches between playback, search and downloads.
+                html = (ROOT / 'workflow.html').read_bytes()
+                respond('200 OK', 'text/html; charset=utf-8', html)
+            else:
+                html = (ROOT / 'index.html').read_bytes().replace(b' data-xiaomi-shell', b'')
+                respond("200 OK", "text/html; charset=utf-8", html)
+            return
+
+        if path in {'api/downloads', 'api/downloads/torrent'}:
+            if method not in ({'POST'} if path.endswith('/torrent') else {'GET', 'POST'}):
+                raise GatewayError(405, 'method_not_allowed', 'Unsupported music download operation')
+            # Lazy import keeps unrelated playback usable if download settings
+            # have not been configured on another installation.
+            sys.path.insert(0, str(ROOT))
+            from torrent_import import MusicDownloads, MusicDownloadError
+            try:
+                manager = MusicDownloads(settings, APP_ROOT)
+                if method == 'GET':
+                    result = manager.status()
+                elif path.endswith('/torrent'):
+                    import base64
+                    payload = json.loads(_json_request(environ, ['torrent']))
+                    raw = base64.b64decode(payload.get('torrent', ''), validate=True)
+                    result = manager.submit_torrent(raw)
+                else:
+                    payload = json.loads(_json_request(environ, ['magnet']))
+                    result = manager.submit(payload.get('magnet', ''))
+                respond('200 OK', 'application/json; charset=utf-8', json_bytes(result))
+            except MusicDownloadError as error:
+                raise GatewayError(error.status, 'music_download_failed', str(error)) from None
+            except (ValueError, TypeError, KeyError):
+                raise GatewayError(400, 'invalid_download', '请检查磁力链接或种子文件。') from None
             return
         if path in STATIC_ASSETS:
             if method != "GET":
@@ -455,6 +613,31 @@ def serve():
             if method != "GET":
                 raise GatewayError(405, "method_not_allowed", "Status requires GET")
             respond("200 OK", "application/json; charset=utf-8", json_bytes(_status_payload(settings, environ)))
+            return
+
+        if path == 'api/session':
+            if method not in {'GET', 'POST', 'DELETE'}:
+                raise GatewayError(405, 'method_not_allowed', 'Unsupported session operation')
+            credentials = json.loads(_json_request(environ, ['username', 'password'])) if method == 'POST' else None
+            session = native_session(settings, environ, credentials=credentials, forget=method == 'DELETE')
+            if method == 'DELETE':
+                session = {'remembered': False}
+            elif not session:
+                raise GatewayError(401, 'login_required', 'Automatic login is disabled')
+            respond('200 OK', 'application/json; charset=utf-8', json_bytes(session))
+            return
+
+        if path in {'api/scan', 'api/scan/progress'}:
+            expected = 'POST' if path == 'api/scan' else 'GET'
+            if method != expected:
+                raise GatewayError(405, 'method_not_allowed', 'Unsupported scan operation')
+            session = native_session(settings, environ)
+            auth = _auth_header(environ) or ('Bearer ' + session['access_token'] if session else None)
+            if not auth:
+                raise GatewayError(401, 'login_required', 'Songloft login required')
+            connection, response = _request(settings, environ, method, '/api/v1/' + path[4:],
+                                            body=b'{"reimport":false}' if method == 'POST' else None, auth=auth)
+            _forward_response(connection, response)
             return
 
         if path in {"api/login", "api/refresh", "api/logout"}:
@@ -485,9 +668,19 @@ def serve():
         if method != "GET":
             raise GatewayError(405, "method_not_allowed", "Music API is read-only")
         auth = _auth_header(environ)
+        native = None
+        if not auth and endpoint not in {'/api/v1/health', '/api/v1/version'}:
+            native = native_session(settings, environ)
+            auth = 'Bearer ' + native['access_token'] if native else None
         if endpoint not in {"/api/v1/health", "/api/v1/version"} and not auth:
             raise GatewayError(401, "login_required", "Songloft login required")
         connection, response = _request(settings, environ, "GET", endpoint, validated_query, auth=auth)
+        if response.status == 401 and native:
+            response.read()
+            connection.close()
+            native = native_session(settings, environ, renew=True)
+            connection, response = _request(settings, environ, 'GET', endpoint, validated_query,
+                                            auth='Bearer ' + native['access_token'])
         _forward_response(connection, response)
     except GatewayError as exc:
         error_response(exc.status, exc.code, exc.message)

@@ -113,7 +113,8 @@
     hint.setAttribute('role', 'status');
     hint.hidden = true;
     document.body.append(button, hint);
-    let side = 'right';
+    // Keep the default clear of download/search actions on narrow screens.
+    let side = innerWidth <= 760 ? 'left' : 'right';
     let ratio = .58;
     let drag = null;
     let suppressClickUntil = 0;

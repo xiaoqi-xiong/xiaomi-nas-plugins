@@ -18,19 +18,20 @@
     <section id="notice" class="notice" role="status" aria-live="polite">正在检查 Songloft…</section>
     <section id="login" class="panel" hidden>
       <h1>连接你的音乐库</h1>
-      <p>Songloft 服务由你自行部署，登录凭证只提交到本机 Music 网关。</p>
+      <p>连接 NAS 上的音乐服务。登录后会记住此账号，下次打开自动连接。</p>
       <form id="login-form">
         <label>用户名<input name="username" autocomplete="username" required></label>
         <label>密码<input name="password" type="password" autocomplete="current-password" required></label>
-        <button class="primary" type="submit">登录 Songloft</button>
+        <button class="primary" type="submit">登录并记住</button>
       </form>
       <p id="login-error" class="error" role="alert"></p>
     </section>
     <section id="library" hidden>
       <div class="library-head">
-        <div><p class="eyebrow">我的曲库</p><h1>歌曲</h1></div>
+        <div><p class="eyebrow">我的曲库 · <span id="library-count">读取中</span></p><h1>歌曲</h1></div>
         <form id="search-form" class="search" role="search"><input id="search" type="search" placeholder="搜索歌名、歌手或专辑" aria-label="搜索"><button type="submit">搜索</button></form>
       </div>
+      <p><button id="scan" class="quiet" type="button">扫描曲库</button> <small>把歌曲放入小米“我的音乐”目录，每 5 分钟自动扫描。</small></p>
       <div id="library-error" class="error" role="alert"></div>
       <div id="songs" class="songs"></div>
       <button id="more" class="more" type="button" hidden>加载更多</button>

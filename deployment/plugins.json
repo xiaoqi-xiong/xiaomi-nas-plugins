@@ -19,6 +19,7 @@
     },
     {
       "id": "resource-monitor",
+      "native_id": "sysmon",
       "title": "系统监控",
       "handler": "resource-monitor/monitor.cgi",
       "entry": "/index.html#overview",
@@ -27,6 +28,7 @@
     },
     {
       "id": "docker-monitor",
+      "native_id": "dockermon",
       "title": "Docker",
       "handler": "resource-monitor/monitor.cgi",
       "entry": "/index.html#docker",

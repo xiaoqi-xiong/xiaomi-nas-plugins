@@ -162,7 +162,8 @@
       offset += list.length;
       hasMore = offset < Number(data.total || 0);
       more.hidden = !hasMore;
-      if (!list.length && !offset) error.textContent = "曲库为空。请在 Songloft 中配置音乐目录并执行扫描。";
+      document.getElementById('library-count').textContent = '共 ' + Number(data.total || 0) + ' 首';
+      if (!list.length && !offset) error.textContent = "曲库为空。把歌曲放入小米“我的音乐”目录后，点击“扫描曲库”。";
     } catch (err) { error.textContent = err.message || "读取曲库失败"; }
   }
 
@@ -195,14 +196,16 @@
 
   document.getElementById("login-form").addEventListener("submit", async function (event) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const error = document.getElementById("login-error");
     error.textContent = "";
     try {
-      const response = await fetch(route("api/login"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: form.get("username"), password: form.get("password") }) });
+      const response = await fetch(route("api/session"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: form.get("username"), password: form.get("password") }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "登录失败");
       saveTokens(data);
+      formElement.reset();
       await showLibrary();
     } catch (err) { error.textContent = err.message || "登录失败"; }
   });
@@ -210,8 +213,32 @@
   more.addEventListener("click", function () { if (hasMore) loadSongs(false); });
   logout.addEventListener("click", async function () {
     stopPlayback();
+    const forgotten = await fetch(route('api/session'), {method: 'DELETE', cache: 'no-store'}).catch(() => null);
+    if (!forgotten?.ok) { setNotice('未能关闭自动登录，请重试', 'warn'); return; }
     try { await request("api/logout", { method: "POST" }); } catch (_) {}
     saveTokens(null); showLogin("已退出 Songloft");
+  });
+
+  document.getElementById('scan').addEventListener('click', async function () {
+    const button = this;
+    button.disabled = true;
+    try {
+      const response = await request('api/scan', {method: 'POST'});
+      if (!response.ok && response.status !== 409) throw Error('扫描未能开始，请重试');
+      setNotice('正在扫描曲库…', 'ok');
+      const timer = setInterval(async function () {
+        try {
+          const progressResponse = await request('api/scan/progress');
+          if (!progressResponse.ok) throw Error();
+          const progress = await progressResponse.json();
+          if (['idle', 'completed', 'failed', 'cancelled'].includes(progress.status)) {
+            clearInterval(timer); button.disabled = false;
+            setNotice(progress.status === 'failed' ? '扫描失败，请检查音乐目录' : '曲库扫描完成', progress.status === 'failed' ? 'warn' : 'ok');
+            await loadSongs(true);
+          }
+        } catch (_) { clearInterval(timer); button.disabled = false; setNotice('无法读取扫描状态，请重试', 'warn'); }
+      }, 1500);
+    } catch (err) { button.disabled = false; setNotice(err.message, 'warn'); }
   });
 
   async function showLibrary() {
@@ -223,7 +250,7 @@
 
   const back = document.getElementById("native-back");
   const mobileHost = !!(window.flutter_inappwebview || window.android_webview) || /Android|iPhone|iPad/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent));
-  if (mobileHost) {
+  if (mobileHost && document.body.hasAttribute('data-xiaomi-shell')) {
     back.hidden = false;
     back.addEventListener("click", function () {
       if (typeof window.hs_callHandler === "function") window.hs_callHandler("normal_goback", {}, function () {});
@@ -232,6 +259,8 @@
 
   (async function init() {
     if (!(await status())) return;
+    const remembered = await fetch(route('api/session'), {cache: 'no-store'}).catch(() => null);
+    if (remembered?.ok) saveTokens(await remembered.json());
     if (tokens()) await showLibrary();
     else showLogin();
   }());

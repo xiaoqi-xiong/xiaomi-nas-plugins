@@ -1,10 +1,10 @@
 # 安装与回退
 
-这些文件适用于已经具备小米原生认证 CGI 插件执行环境的设备。源码包不是官方商店插件包，也没有通用的一键安装器。不同固件的注册机制可能不同；未核实原生插件宿主时不要写注册数据库或执行历史 Root 脚本。
+这些文件适用于已经具备小米原生认证 CGI 插件执行环境的设备。源码包不是官方商店插件包，也没有通用的一键安装器。不同固件的注册机制可能不同；未核实原生插件宿主时不要写注册数据库或执行历史 Root 脚本。若 SSH 或初始 Root 入口不确定，先阅读 [Root 与 SSH：发现、备份、恢复和回退](ROOT-SSH.md)，不要把插件部署当作恢复 Root 的方法。
 
 ## 先核实环境
 
-1. 确认现有授权的 SSH/管理入口可用，记录固件版本与当前插件注册文件位置。
+1. 先按 [ROOT-SSH.md](ROOT-SSH.md) 确认现有授权的 SSH/管理入口可用，记录固件版本与当前插件注册文件位置；没有可靠入口时暂停部署。
 2. 只读检查现有服务端口、owner/UID、插件根目录、服务挂载和可用容量。
 3. 备份现有插件源码与注册项，私有配置单独保存。保留旧版本以便回退。
 4. 不停止下载、移动媒体、重建现有容器或修改路由来安装这些网页。
@@ -28,7 +28,7 @@ python3 scripts/build_bundle.py --output /tmp/xiaomi-nas-plugins-source.tar.gz
 
 - `resources` 指向 MediaStack，传入 `NATIVE_PLUGIN_ID=resources`，入口必须是 `/center/index.html` 或 `/center/`，保证相对资源解析正确。
 - MoviePilot 保留原 `mediastack` ID 和根入口。
-- `resource-monitor` 与 `docker-monitor` 指向同一 monitor CGI，以不同 hash 打开标签。
+- `resource-monitor` 与 `docker-monitor` 指向同一 monitor CGI，以不同 hash 打开标签；原生注册使用目录中的 `native_id`：`sysmon`、`dockermon`。源码逻辑 ID 保持原样，避免厂商分发器拒绝带连字符的原生 ID。
 - 音乐使用独立 music CGI；Songloft 服务按 [MUSIC.md](MUSIC.md) 单独部署。
 - 原 `qbpt`、`qbpublic`、`pansou` 注册别名可保留。详情见架构文档。
 
@@ -44,4 +44,4 @@ python3 scripts/build_bundle.py --output /tmp/xiaomi-nas-plugins-source.tar.gz
 
 ## 固件或地址变化
 
-DHCP 保留地址能避免 IP 改变，但不保证 SSH 和插件在固件升级后仍存在。先查当前租约和端口。没有可靠入口时暂停部署；不要盲目重刷、降级、修改安全标志或删除现有数据。
+DHCP 保留地址能避免 IP 改变，但不保证 SSH 和插件在固件升级后仍存在。先查当前租约和端口，再按 [ROOT-SSH.md](ROOT-SSH.md) 区分地址变化、已有 SSH 恢复和初次 Root 入口。没有可靠入口时暂停部署；不要盲目重刷、降级、修改安全标志或删除现有数据。

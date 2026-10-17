@@ -1,0 +1,12 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>音乐下载</title><link rel="stylesheet" href="workflow.css"></head>
+<body class="downloads-page"><main class="downloads-content">
+<h1>下载到我的音乐</h1><p class="muted">使用公共下载器。完整音频下载完成后自动加入曲库，原文件保留做种。</p>
+<form id="music-download-form" class="download-form">
+<label for="music-magnet">音乐磁力链接</label><textarea id="music-magnet" placeholder="magnet:?xt=urn:btih:…" spellcheck="false" required></textarea>
+<div class="actions"><button type="submit" class="primary">开始下载</button><label class="file-label">或导入种子<input id="music-torrent" type="file" accept=".torrent" aria-label="导入音乐种子文件"></label></div>
+<p id="download-message" role="status"></p><p id="music-target" class="muted"></p>
+</form>
+<div class="section-heading"><h2>音乐任务</h2><button type="button" id="refresh-downloads">刷新</button></div>
+<p class="muted help">可在“搜音乐”里查找资源，选择磁力结果的“下载到…” → “音乐自动入库”。网盘分享需要对应网盘支持。</p>
+<div id="music-tasks" aria-live="polite"></div><p id="task-error" role="status"></p>
+</main><script src="downloads.js"></script></body></html>

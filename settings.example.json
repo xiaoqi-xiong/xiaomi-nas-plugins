@@ -3,6 +3,10 @@
   "owner_uid": 1000,
   "nas_host": "127.0.0.1",
   "proxy_controller_host": "127.0.0.1",
+  "music": {
+    "songloft_url": "http://127.0.0.1:58091",
+    "qb_host": "127.0.0.1"
+  },
   "ports": {
     "moviepilot": 3000,
     "pt": 18080,

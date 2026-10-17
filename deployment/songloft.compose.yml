@@ -5,6 +5,10 @@ services:
     platform: linux/arm64
     container_name: songloft
     restart: unless-stopped
+    # The upstream PUID entrypoint chowns /app/music and fails on a read-only
+    # library. Run the pinned binary directly as the owner instead.
+    user: "${SONGLOFT_UID:-1000}:${SONGLOFT_GID:-1000}"
+    entrypoint: ["/app/songloft"]
     # Keep the service on the NAS loopback interface.  The Music CGI gateway
     # is the native UI boundary; publish a LAN address only by an explicit,
     # separately reviewed reverse-proxy configuration.
@@ -19,5 +23,5 @@ services:
       ADMIN_USERNAME: "${SONGLOFT_ADMIN_USERNAME:?set SONGLOFT_ADMIN_USERNAME}"
       ADMIN_PASSWORD: "${SONGLOFT_ADMIN_PASSWORD:?set SONGLOFT_ADMIN_PASSWORD}"
       LISTEN_PORT: "58091"
-      PUID: "${SONGLOFT_UID:-1000}"
-      PGID: "${SONGLOFT_GID:-1000}"
+      MUSIC_DIR: /app/music
+      DB_PATH: /app/data/songloft.db

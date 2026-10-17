@@ -65,6 +65,9 @@ def remembered_session(route):
                 if route == 'pansou':
                     headers['Content-Type'] = 'application/json'
                     conn.request('POST', '/api/auth/login', json.dumps(credentials).encode(), headers)
+                elif route == 'moviepilot':
+                    headers['Content-Type'] = 'application/x-www-form-urlencoded'
+                    conn.request('POST', '/api/v1/login/access-token', urlencode(credentials), headers)
                 else:
                     headers['Content-Type'] = 'application/x-www-form-urlencoded'
                     conn.request('POST', '/api/v2/auth/login', urlencode(credentials), headers)
@@ -76,6 +79,19 @@ def remembered_session(route):
                     result = json.loads(raw)
                     token = result.get('token') or result.get('data', {}).get('token')
                     answer = {'token': token, 'username': credentials['username']}
+                elif route == 'moviepilot':
+                    result = json.loads(raw)
+                    token = result.get('access_token')
+                    if not isinstance(token, str) or not token or not isinstance(result.get('permissions'), dict):
+                        raise ValueError()
+                    answer = {'auth': {'token': token, 'remember': True, 'originalPath': None},
+                              'user': {key: result[source] for key, source in [
+                                  ('superUser', 'super_user'), ('userID', 'user_id'),
+                                  ('userName', 'user_name'), ('avatar', 'avatar'),
+                                  ('level', 'level'), ('permissions', 'permissions')]}}
+                    answer['user']['permissions'] = {
+                        'discovery': True, 'search': True, 'subscribe': True,
+                        'manage': False, 'admin': False, 'features': {}, **result['permissions']}
                 else:
                     cookie_name = 'QBT_SID_' + str(port)
                     sid = next((v.split(';', 1)[0].split('=', 1)[1] for k, v in response.getheaders()
@@ -198,13 +214,41 @@ def native_download():
         safe = str(e) if isinstance(e, ValueError) and str(e) in ['仅支持磁力链接', '磁力链接缺少有效的种子信息', '下载器未接受此链接', '下载器请求失败'] else '下载器暂时不可用，请稍后重试'
         fail('400 Bad Request', safe)
 
+def native_music_download():
+    """The same bounded music queue used by the Music application's UI."""
+    sys.path.insert(0, str(APP_ROOT / 'music'))
+    from torrent_import import MusicDownloads, MusicDownloadError
+    try:
+        manager = MusicDownloads(SETTINGS, APP_ROOT)
+        method = os.environ.get('REQUEST_METHOD', 'GET')
+        if method == 'GET':
+            result = manager.options()
+        elif method == 'POST':
+            length = int(os.environ.get('CONTENT_LENGTH') or '0')
+            if not 0 < length <= 32768:
+                raise ValueError()
+            payload = json.loads(sys.stdin.buffer.read(length))
+            result = manager.submit(payload.get('magnet', ''))
+        else:
+            respond('405 Method Not Allowed', 'application/json', '{}')
+            return
+        respond('200 OK', 'application/json', json.dumps(result, ensure_ascii=False))
+    except MusicDownloadError as error:
+        from http import HTTPStatus
+        respond(str(error.status) + ' ' + HTTPStatus(error.status).phrase,
+                'application/json', json.dumps({'error': str(error)}, ensure_ascii=False))
+    except (OSError, ValueError, TypeError, KeyError):
+        respond('400 Bad Request', 'application/json', '{"error":"音乐下载暂时不可用，请核对链接后重试。"}')
+
 # plugin.cgi and the vendor fcgi gate validate the native login before exec.
 # Keep an additional fixed owner check; no aliases bypass the gate.
 if not owner_is_valid(SETTINGS, os.environ.get('USER', ''), os.getuid()):
     respond('403 Forbidden', 'text/plain', 'Native owner login required')
+elif path == 'pansou/native/music':
+    native_music_download()
 elif path == 'pansou/native/download':
     native_download()
-elif path in ['pt/native/session', 'public/native/session', 'pansou/native/session']:
+elif path in ['pt/native/session', 'public/native/session', 'pansou/native/session', 'moviepilot/native/session']:
     remembered_session(path.split('/')[0])
 elif app_override in ['pt', 'public', 'pansou'] and path == app_override + '/index.html' and \
         'embedded=1' not in os.environ.get('QUERY_STRING', ''):
@@ -341,7 +385,13 @@ else:
                     'await window.nativePanReady; import(' + json.dumps(m.group(1)) + ');</script>', html)
                 body = html.encode('utf-8')
             if route == 'moviepilot' and 'text/html' in content_type and rest in ['', 'index.html']:
-                body = body.replace(b'<head>', b'<head><script src="./bridge-auth.js"></script>', 1)
+                import re
+                html = body.decode('utf-8').replace('<head>', '<head><script src="./bridge-auth.js"></script>', 1)
+                # Pinia must hydrate the owner session before its route guard runs.
+                html = re.sub(r'<script type="module"[^>]*src="([^"]+)"[^>]*></script>',
+                    lambda m: '<script type="module">await window.nativeMoviePilotReady; import(' +
+                    json.dumps(m.group(1)) + ');</script>', html)
+                body = html.encode('utf-8')
             if upstream.status >= 400 and 'text/html' in content_type:
                 # Same-origin iframe load events do not expose HTTP status.
                 # Add a fixed marker so the Resource Center cannot present an
