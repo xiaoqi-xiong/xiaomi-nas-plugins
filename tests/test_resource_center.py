@@ -1,5 +1,7 @@
+import io
 import json
 import os
+import runpy
 import shutil
 import subprocess
 import sys
@@ -8,6 +10,7 @@ import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from unittest.mock import patch
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -46,6 +49,7 @@ def setup_sandbox(tmp_path: Path) -> Path:
                 "owner": "resource-owner",
                 "owner_uid": os.getuid(),
                 "nas_host": "127.0.0.1",
+                "music": {"search_host": "127.0.0.1"},
                 "plugin_namespace": "test-space",
                 "ports": {"pt": 1, "public": 1, "pansou": 1, "moviepilot": 1},
             }
@@ -161,6 +165,129 @@ class ResourceCenterTests(unittest.TestCase):
         finally:
             server.shutdown()
             server.server_close()
+
+    def test_music_override_uses_search_host_and_rewrites_qb_paths(self):
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.server.last_host = self.headers.get("Host")
+                self.send_response(302)
+                self.send_header("Location", "/signin")
+                self.send_header("Set-Cookie", f"QBT_SID_{self.server.server_port}=sid; Path=/")
+                self.end_headers()
+
+            def log_message(self, *_args):
+                pass
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        settings_file = self.sandbox / "settings.json"
+        settings = json.loads(settings_file.read_text(encoding="utf-8"))
+        settings["nas_host"] = "nas-host-that-is-not-used.example"
+        settings["music"]["search_host"] = "127.0.0.1"
+        settings["ports"]["public"] = server.server_port
+        settings_file.write_text(json.dumps(settings), encoding="utf-8")
+        server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+        server_thread.start()
+        try:
+            env = os.environ.copy()
+            env.update(
+                {
+                    "FILE_URI": "public/api/v2/app/version",
+                    "REQUEST_METHOD": "GET",
+                    "CONTENT_LENGTH": "0",
+                    "USER": "resource-owner",
+                    "NATIVE_PLUGIN_ID": "music",
+                    "NATIVE_APP_ROUTE": "",
+                }
+            )
+            result = subprocess.run(
+                [sys.executable, str(self.sandbox / "mediastack" / "mediastack.cgi")],
+                env=env,
+                input=b"",
+                capture_output=True,
+                check=False,
+            )
+            status, headers, _ = response(result)
+            self.assertEqual(status, "Status: 302 Found")
+            self.assertEqual(server.last_host, f"127.0.0.1:{server.server_port}")
+            self.assertEqual(headers["Location"], "/plugin/test-space/music/public/signin")
+            self.assertEqual(headers["Set-Cookie"],
+                             f"QBT_SID_{server.server_port}=sid; Path=/plugin/test-space/music/public/")
+        finally:
+            server.shutdown()
+            server.server_close()
+
+    def test_music_search_host_rejects_urls_before_connecting(self):
+        settings_file = self.sandbox / "settings.json"
+        settings = json.loads(settings_file.read_text(encoding="utf-8"))
+        for invalid in ("http://127.0.0.1", " 127.0.0.1 "):
+            with self.subTest(invalid=invalid):
+                settings["music"]["search_host"] = invalid
+                settings_file.write_text(json.dumps(settings), encoding="utf-8")
+                result = run_gateway(self.sandbox, "pansou/vendor-ui/index.html", plugin_id="music")
+                status, _, body = response(result)
+                self.assertEqual(status, "Status: 502 Bad Gateway")
+                self.assertIn(b"Application temporarily unavailable", body)
+
+    def test_music_ipv6_host_uses_bracketed_http_authority(self):
+        settings_file = self.sandbox / "settings.json"
+        settings = json.loads(settings_file.read_text(encoding="utf-8"))
+        settings["music"]["search_host"] = "[::1]"
+        settings["ports"]["public"] = 12345
+        settings_file.write_text(json.dumps(settings), encoding="utf-8")
+
+        class Upstream:
+            status = 302
+            reason = "Found"
+
+            def getheaders(self):
+                return [
+                    ("Location", "/signin"),
+                    ("Set-Cookie", "QBT_SID_12345=sid; Path=/"),
+                ]
+
+            def getheader(self, name, default=None):
+                return default
+
+            def read(self):
+                return b""
+
+        calls = []
+
+        class FakeConnection:
+            def __init__(self, host, port, timeout=None):
+                calls.append({"host": host, "port": port, "timeout": timeout, "headers": None})
+
+            def request(self, method, target, body=None, headers=None):
+                calls[-1]["headers"] = headers
+
+            def getresponse(self):
+                return Upstream()
+
+            def close(self):
+                pass
+
+        output = type("Stdout", (), {"buffer": io.BytesIO()})()
+        env = {
+            "FILE_URI": "public/api/v2/app/version",
+            "REQUEST_METHOD": "GET",
+            "CONTENT_LENGTH": "0",
+            "QUERY_STRING": "",
+            "USER": "resource-owner",
+            "NATIVE_PLUGIN_ID": "music",
+            "NATIVE_APP_ROUTE": "",
+        }
+        with patch.dict(os.environ, env, clear=True), \
+                patch.object(sys, "stdout", output), \
+                patch("http.client.HTTPConnection", FakeConnection):
+            runpy.run_path(str(self.sandbox / "mediastack" / "mediastack.cgi"), run_name="__main__")
+
+        self.assertEqual(calls[0]["host"], "::1")
+        self.assertEqual(calls[0]["headers"]["Host"], "[::1]:12345")
+        self.assertEqual(calls[0]["headers"]["Origin"], "http://[::1]:12345")
+        self.assertEqual(calls[0]["headers"]["Referer"], "http://[::1]:12345/")
+        wire = output.buffer.getvalue()
+        self.assertIn(b"Location: /plugin/test-space/music/public/signin", wire)
+        self.assertIn(b"Path=/plugin/test-space/music/public/", wire)
 
     def test_owner_gate_still_applies_to_center(self):
         denied = response(run_gateway(self.sandbox, "center/index.html", user="someone-else"))

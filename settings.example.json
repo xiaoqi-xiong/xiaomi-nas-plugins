@@ -5,6 +5,7 @@
   "proxy_controller_host": "127.0.0.1",
   "music": {
     "songloft_url": "http://127.0.0.1:58091",
+    "search_host": "127.0.0.1",
     "qb_host": "127.0.0.1"
   },
   "ports": {

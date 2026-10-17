@@ -2,12 +2,23 @@
   'use strict';
   const paths = {
     player: ['vendor-ui/index.html', 'Songloft 音乐播放器'],
-    search: ['../resources/pansou/vendor-ui/index.html?music=1', '盘搜音乐资源'],
+    search: ['pansou/vendor-ui/index.html?music=1', '盘搜音乐资源'],
     downloads: ['downloads.html', '音乐下载与入库'],
   };
   const frames = new Map();
   const error = document.getElementById('workflow-error');
-  const base = window.__MICRO_APP_PUBLIC_PATH__ || new URL('.', location.href).href;
+  const base = (() => {
+    const hinted = window.__MICRO_APP_PUBLIC_PATH__;
+    if (typeof hinted === 'string' && hinted) {
+      try {
+        const url = new URL(hinted, location.href);
+        if (!url.pathname.endsWith('/')) url.pathname += '/';
+        url.hash = ''; url.search = '';
+        return url.href;
+      } catch { /* The document URL remains the safe fallback. */ }
+    }
+    return new URL('.', location.href).href;
+  })();
   function activate(view) {
     if (!paths[view]) return;
     error.hidden = true;

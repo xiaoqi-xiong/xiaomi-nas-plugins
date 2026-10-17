@@ -20,6 +20,7 @@ import json
 import mimetypes
 import os
 import re
+import runpy
 import sys
 import time
 from http import HTTPStatus
@@ -353,6 +354,44 @@ def native_session(settings, environ, credentials=None, forget=False, renew=Fals
         os.close(descriptor)
 
 
+def _normalized_pansou_route(file_uri):
+    """Return a safe PanSou route, or ``None`` for every other URI."""
+    parsed = urlsplit(file_uri or "")
+    path = unquote(parsed.path).lstrip("/")
+    if path != "pansou" and not path.startswith("pansou/"):
+        return None
+    if any(segment in {".", ".."} for segment in path.split("/")) or "\\" in path:
+        return None
+    return path
+
+
+def _delegate_pansou(environ):
+    """Run the shared PanSou gateway after Music has checked its owner."""
+    file_uri = environ.get("FILE_URI", "")
+    parsed = urlsplit(file_uri)
+    route = _normalized_pansou_route(file_uri)
+    if route is None:
+        return False
+    query = parsed.query or environ.get("QUERY_STRING", "") or ""
+    original = {
+        key: environ.get(key)
+        for key in ("FILE_URI", "QUERY_STRING", "NATIVE_PLUGIN_ID", "NATIVE_APP_ROUTE")
+    }
+    environ["FILE_URI"] = "/" + route + ("?" + query if query else "")
+    environ["QUERY_STRING"] = query
+    environ["NATIVE_PLUGIN_ID"] = "music"
+    environ["NATIVE_APP_ROUTE"] = ""
+    try:
+        runpy.run_path(str(APP_ROOT / "mediastack" / "mediastack.cgi"), run_name="__main__")
+    finally:
+        for key, value in original.items():
+            if value is None:
+                environ.pop(key, None)
+            else:
+                environ[key] = value
+    return True
+
+
 def _read_body(environ):
     try:
         length = int(environ.get("CONTENT_LENGTH", "0") or "0")
@@ -525,6 +564,9 @@ def serve():
     environ = os.environ
     if not owner_is_valid(settings, environ.get("USER", ""), os.getuid()):
         error_response(403, "owner_required", "Native owner login required")
+        return
+
+    if _delegate_pansou(environ):
         return
 
     path = native_path(environ.get("FILE_URI", ""))

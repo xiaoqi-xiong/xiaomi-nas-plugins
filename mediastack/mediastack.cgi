@@ -3,8 +3,10 @@
 import json
 import base64
 import http.client
+import ipaddress
 import mimetypes
 import os
+import re
 from pathlib import Path
 import sys
 from urllib.parse import quote, unquote, urlsplit, urlencode
@@ -27,6 +29,48 @@ def respond(status, content_type, body):
     sys.stdout.buffer.write(('Status: ' + status + '\r\nContent-Type: ' + content_type +
                              '\r\nCache-Control: no-store\r\nContent-Length: ' +
                              str(len(body)) + '\r\n\r\n').encode() + body)
+
+
+def _validated_host(candidate):
+    """Validate a fixed host value without accepting a URL or authority."""
+    if not isinstance(candidate, str):
+        raise ValueError('invalid backend host')
+    if candidate != candidate.strip():
+        raise ValueError('invalid backend host')
+    host = candidate
+    if host.startswith('[') and host.endswith(']'):
+        host = host[1:-1]
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        if (not host or len(host) > 253 or host.startswith('.') or host.endswith('.')
+                or any(ord(char) <= 32 for char in host)
+                or any(char in host for char in '/?#@\\')):
+            raise ValueError('invalid backend host')
+        if not re.fullmatch(r'[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,251}[A-Za-z0-9])?', host):
+            raise ValueError('invalid backend host')
+    return host
+
+
+def _backend_host(route):
+    """Select the fixed upstream host for a native route."""
+    if plugin_override == 'music' and route in ['pansou', 'public']:
+        music = SETTINGS.get('music') if isinstance(SETTINGS.get('music'), dict) else {}
+        return _validated_host(music.get('search_host') or SETTINGS.get('nas_host'))
+    return SETTINGS['nas_host']
+
+
+def _host_authority(host):
+    """Format a host for HTTP authority headers without changing the target."""
+    if isinstance(host, str) and host.startswith('[') and host.endswith(']'):
+        return host
+    try:
+        if ipaddress.ip_address(host).version == 6:
+            return '[' + host + ']'
+    except ValueError:
+        pass
+    return host
+
 
 def remembered_session(route):
     """Native owner gate stays mandatory. Only an app SID/JWT leaves the NAS."""
@@ -58,8 +102,10 @@ def remembered_session(route):
             if not all(isinstance(v, str) and 0 < len(v) < 512 for v in credentials.values()):
                 raise ValueError()
             port = SETTINGS['ports'][route]
-            base = 'http://' + SETTINGS['nas_host'] + ':' + str(port)
-            conn = http.client.HTTPConnection(SETTINGS['nas_host'], port, timeout=15)
+            host = _backend_host(route)
+            authority = _host_authority(host)
+            base = 'http://' + authority + ':' + str(port)
+            conn = http.client.HTTPConnection(host, port, timeout=15)
             try:
                 headers = {'Origin': base, 'Referer': base + '/'}
                 if route == 'pansou':
@@ -145,9 +191,11 @@ def native_download():
             fail('401 Unauthorized', '请先在此下载器登录并开启记住登录')
             return
         port = SETTINGS['ports'][app]
-        conn = http.client.HTTPConnection(SETTINGS['nas_host'], port, timeout=20)
-        headers = {'Origin': 'http://' + SETTINGS['nas_host'] + ':' + str(port),
-                   'Referer': 'http://' + SETTINGS['nas_host'] + ':' + str(port) + '/',
+        host = _backend_host(app)
+        authority = _host_authority(host)
+        conn = http.client.HTTPConnection(host, port, timeout=20)
+        headers = {'Origin': 'http://' + authority + ':' + str(port),
+                   'Referer': 'http://' + authority + ':' + str(port) + '/',
                    'Content-Type': 'application/x-www-form-urlencoded'}
         conn.request('POST', '/api/v2/auth/login', urlencode({k: cred[k] for k in ['username', 'password']}), headers)
         login = conn.getresponse();login.read()
@@ -324,9 +372,17 @@ else:
         if method not in ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] or length > 8388608:
             respond('413 Payload Too Large', 'text/plain', 'Unsupported request')
             sys.exit()
-        headers = {'Host': SETTINGS['nas_host'] + ':' + str(port),
-                   'Origin': 'http://' + SETTINGS['nas_host'] + ':' + str(port),
-                   'Referer': 'http://' + SETTINGS['nas_host'] + ':' + str(port) + '/',
+        try:
+            backend_host = _backend_host(route)
+        except ValueError:
+            # Treat an invalid Music override as a configuration failure and
+            # never attempt a connection using a partially parsed value.
+            backend_host = None
+        header_host = backend_host or 'invalid-backend-host'
+        authority = _host_authority(header_host)
+        headers = {'Host': authority + ':' + str(port),
+                   'Origin': 'http://' + authority + ':' + str(port),
+                   'Referer': 'http://' + authority + ':' + str(port) + '/',
                    'Accept-Encoding': 'identity'}
         for env, header in [('CONTENT_TYPE', 'Content-Type'), ('HTTP_ACCEPT', 'Accept')]:
             if os.environ.get(env):
@@ -357,9 +413,11 @@ else:
             except (IndexError, ValueError, TypeError):
                 pass
         try:
+            if backend_host is None:
+                raise ValueError('invalid backend host')
             # Existing ports bind only the NAS LAN address, not loopback.
             # Keep this fixed same-NAS destination; never accept a target URL.
-            conn = http.client.HTTPConnection(SETTINGS['nas_host'], port, timeout=60)
+            conn = http.client.HTTPConnection(backend_host, port, timeout=60)
             conn.request(method, target, body=sys.stdin.buffer.read(length) if length else None,
                          headers=headers)
             upstream = conn.getresponse()
@@ -404,11 +462,11 @@ else:
                     body = marker + body
             prefix = f"/plugin/{SETTINGS['plugin_namespace']}/mediastack/{route}/"
             cookie_prefix = f"/plugin/{SETTINGS['plugin_namespace']}/mediastack/" if route == 'moviepilot' else prefix
-            if plugin_override == 'resources':
-                # The center shares one plugin id while keeping each backend
-                # under its sibling route, so upstream redirects and cookies
-                # must retain /resources/{route}/.
-                prefix = f"/plugin/{SETTINGS['plugin_namespace']}/resources/{route}/"
+            if plugin_override in ['resources', 'music']:
+                # The center and Music share one plugin id while keeping each
+                # backend under its sibling route, so upstream redirects and
+                # cookies must retain /{plugin_override}/{route}/.
+                prefix = f"/plugin/{SETTINGS['plugin_namespace']}/{plugin_override}/{route}/"
                 cookie_prefix = prefix
             elif plugin_override in ['qbpt', 'qbpublic', 'pansou']:
                 prefix = f"/plugin/{SETTINGS['plugin_namespace']}/{plugin_override}/"
@@ -431,5 +489,5 @@ else:
             lines += ['Content-Length: ' + str(len(body)), 'Cache-Control: no-store']
             sys.stdout.buffer.write(('\r\n'.join(lines) + '\r\n\r\n').encode() + body)
             conn.close()
-        except (OSError, http.client.HTTPException):
+        except (OSError, ValueError, http.client.HTTPException):
             respond('502 Bad Gateway', 'text/plain', 'Application temporarily unavailable')

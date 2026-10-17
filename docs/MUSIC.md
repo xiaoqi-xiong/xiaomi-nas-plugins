@@ -30,6 +30,7 @@ The shared plugin settings should contain the loopback origin used by the gatewa
 {
   "music": {
     "songloft_url": "http://127.0.0.1:58091",
+    "search_host": "127.0.0.1",
     "qb_host": "127.0.0.1"
   },
   "ports": {
@@ -41,6 +42,8 @@ The shared plugin settings should contain the loopback origin used by the gatewa
 `music.songloft_url` is the preferred explicit setting. If it is omitted, the gateway uses `ports.songloft` when present and constructs a loopback URL. A URL may include Songloft's documented `BASE_PATH`; it may not contain user info, a query, or a fragment. The host must be loopback or match the configured `nas_host`, keeping the gateway fixed to the NAS. Keep the service local to the NAS unless a separately reviewed reverse proxy is required.
 
 `music.qb_host` selects the host for the optional public qBittorrent music importer and defaults to `nas_host` for existing installations. It is a host name or IP address only, without a scheme, credentials, or path. This setting can point at a separate downloader host while Songloft and the native gateway remain on `nas_host`.
+
+`music.search_host` selects the host for the PanSou search service and the public qBittorrent gateway when Music opens those routes. It defaults to `nas_host` and accepts a bare host name, IPv4 address, or bracketed IPv6 address only; schemes, credentials, paths, queries, fragments, backslashes, and whitespace are rejected. Keep the value generic in shared configuration and set the deployment host privately.
 
 ## Gateway and authentication boundary
 

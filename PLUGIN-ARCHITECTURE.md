@@ -14,7 +14,7 @@
 
 `qbpt`、`qbpublic`、`pansou` 旧别名保留，避免破坏书签与既有入口。新的 resources 注册传入 `NATIVE_PLUGIN_ID=resources`，并把相对于插件根目录的路径传给 MediaStack CGI；旧别名另外传 `NATIVE_APP_ROUTE=pt|public|pansou`。不要对新聚合入口设置该旧单服务变量。
 
-搜索下载内部载入 `../pansou/vendor-ui/index.html`、`../pt/index.html?embedded=1`、`../public/index.html?embedded=1`。任务来源始终明确，磁力链接提交前选择下载器。三个 iframe 延迟创建并保留状态；网关错误页显示重试，不伪装成成功。MoviePilot 根路由保持原样。
+搜索下载内部载入 `../pansou/vendor-ui/index.html`、`../pt/index.html?embedded=1`、`../public/index.html?embedded=1`；Music 的搜索页在自己的 `/music/pansou/` 路由下复用同一 PanSou 后端。任务来源始终明确，磁力链接提交前选择下载器。三个 iframe 延迟创建并保留状态；网关错误页显示重试，不伪装成成功。MoviePilot 根路由保持原样。
 
 ## 原生返回与手机布局
 

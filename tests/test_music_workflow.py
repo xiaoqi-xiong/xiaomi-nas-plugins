@@ -42,6 +42,40 @@ class MusicWorkflowTests(unittest.TestCase):
         self.assertIn(b'Status: 403', result)
         self.factory.assert_not_called()
 
+    def test_pansou_delegation_still_requires_the_music_owner(self):
+        with patch.object(music.runpy, 'run_path') as delegated:
+            result = self.call('/pansou/vendor-ui/index.html?music=1', user='other')
+        self.assertIn(b'Status: 403', result)
+        delegated.assert_not_called()
+
+    def test_normalized_pansou_delegation_preserves_query_and_native_identity(self):
+        captured = {}
+
+        def run_path(*args, **kwargs):
+            captured['path'] = os.environ.get('FILE_URI')
+            captured['query'] = os.environ.get('QUERY_STRING')
+            captured['plugin'] = os.environ.get('NATIVE_PLUGIN_ID')
+            captured['app_route'] = os.environ.get('NATIVE_APP_ROUTE')
+            captured['args'] = args
+            captured['kwargs'] = kwargs
+
+        with patch.object(music.runpy, 'run_path', side_effect=run_path):
+            self.call('/pansou/vendor-ui/index.html?music=1&keyword=%E5%91%A8%E6%9D%B0%E4%BC%A6')
+        self.assertEqual(captured['path'], '/pansou/vendor-ui/index.html?music=1&keyword=%E5%91%A8%E6%9D%B0%E4%BC%A6')
+        self.assertEqual(captured['query'], 'music=1&keyword=%E5%91%A8%E6%9D%B0%E4%BC%A6')
+        self.assertEqual(captured['plugin'], 'music')
+        self.assertEqual(captured['app_route'], '')
+        self.assertEqual(captured['args'][0].replace('\\', '/').split('/')[-2:], ['mediastack', 'mediastack.cgi'])
+        self.assertEqual(captured['kwargs'], {'run_name': '__main__'})
+
+    def test_non_pansou_and_traversal_routes_are_not_delegated(self):
+        with patch.object(music.runpy, 'run_path') as delegated:
+            regular = self.call('/pt/index.html')
+            traversal = self.call('/pansou/../index.html')
+        self.assertIn(b'Status: 404', regular)
+        self.assertIn(b'Status: 404', traversal)
+        delegated.assert_not_called()
+
     def test_metadata_and_magnet_are_explicit_post_operations(self):
         self.assertIn(b'Status: 200', self.call('music.cgi?api=downloads'))
         self.assertIn(b'Status: 200', self.call('api/downloads', 'POST', {'magnet': 'magnet:?xt=example'}))
